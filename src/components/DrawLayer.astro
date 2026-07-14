@@ -255,25 +255,24 @@ const widths = [
       else if (k === 'c' && active) clearAll();
     });
 
-    // Touch gesture model: ONE finger draws, TWO fingers scroll the page. We keep
-    // touch-action:none on the capture layer (so the browser never hijacks) and
-    // drive the scroll ourselves from the fingers' centroid. Mouse/pen always draw.
+    // Touch gesture model: ONE finger draws, TWO fingers scroll the page.
+    // Fingers use TOUCH events (not pointer events): iOS fires a spurious
+    // pointercancel on the 2nd touch, which silently broke multi-finger
+    // tracking — so two-finger scroll never actually ran. Touch events report
+    // every finger reliably, and preventDefault() stops iOS from hijacking the
+    // gesture (scroll/zoom). Mouse + pen keep using pointer events below.
     type Mode = 'none' | 'draw' | 'scroll';
-    const touches = new Map<number, { x: number; y: number }>();
     let mode: Mode = 'none';
-    let lastCX = 0;
     let lastCY = 0;
-    // two-finger scroll momentum
+    // two-finger scroll momentum (native scroll is suppressed, so we fling)
     let vY = 0;          // scroll velocity, px per ms
     let lastMoveT = 0;   // timestamp of last scroll move
     let flingRAF = 0;
 
-    function centroid() {
-      let x = 0;
+    function centroidY(list: TouchList) {
       let y = 0;
-      for (const p of touches.values()) { x += p.x; y += p.y; }
-      const n = touches.size || 1;
-      return { x: x / n, y: y / n };
+      for (let i = 0; i < list.length; i++) y += list[i].clientY;
+      return list.length ? y / list.length : 0;
     }
     function stopFling() {
       if (flingRAF) { cancelAnimationFrame(flingRAF); flingRAF = 0; }
@@ -281,15 +280,15 @@ const widths = [
     }
     function startFling() {
       // no fling if the fingers were resting before lift, or barely moving
-      if (performance.now() - lastMoveT > 80 || Math.abs(vY) < 0.03) { vY = 0; return; }
-      vY = Math.max(-4, Math.min(4, vY)); // cap runaway flings
+      if (performance.now() - lastMoveT > 80 || Math.abs(vY) < 0.04) { vY = 0; return; }
+      vY = Math.max(-5, Math.min(5, vY)); // cap runaway flings
       let last = performance.now();
       const step = (now: number) => {
         const dt = Math.min(now - last, 32);
         last = now;
         window.scrollBy(0, vY * dt);
         vY *= Math.pow(0.95, dt / 16); // friction: ~5% decay per frame
-        if (Math.abs(vY) > 0.01) flingRAF = requestAnimationFrame(step);
+        if (Math.abs(vY) > 0.02) flingRAF = requestAnimationFrame(step);
         else { flingRAF = 0; vY = 0; }
       };
       flingRAF = requestAnimationFrame(step);
@@ -320,73 +319,77 @@ const widths = [
       }
     }
 
+    // Mouse / pen — pointer events (fingers are handled by touch events below).
     capture.addEventListener('pointerdown', (e) => {
-      if (!active) return;
-      stopFling(); // any new touch halts an in-flight scroll, like native
-      if (e.pointerType !== 'touch') {
-        mode = 'draw';
-        startStroke(e.clientX, e.clientY);
-        capture!.setPointerCapture(e.pointerId);
-        return;
-      }
-      touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
-      if (mode === 'scroll') return; // already in a multi-finger gesture
-      if (touches.size >= 2) {
-        // a second finger landed → drop the in-progress stroke, start scrolling
-        abortStroke();
-        mode = 'scroll';
-        const c = centroid();
-        lastCX = c.x; lastCY = c.y;
-        lastMoveT = performance.now();
-        vY = 0;
-        return;
-      }
+      if (!active || e.pointerType === 'touch') return;
+      stopFling();
       mode = 'draw';
       startStroke(e.clientX, e.clientY);
+      capture!.setPointerCapture(e.pointerId);
     });
     capture.addEventListener('pointermove', (e) => {
+      if (!active || e.pointerType === 'touch') return;
+      if (mode === 'draw') extendStroke(e.clientX, e.clientY);
+    });
+    function onPointerEnd(e: PointerEvent) {
+      if (e.pointerType === 'touch') return;
+      if (mode === 'draw') endStroke();
+      mode = 'none';
+    }
+    capture.addEventListener('pointerup', onPointerEnd);
+    capture.addEventListener('pointercancel', onPointerEnd);
+
+    // Fingers — touch events. 1 finger = draw, 2+ fingers = scroll the page.
+    capture.addEventListener('touchstart', (e) => {
       if (!active) return;
-      if (e.pointerType !== 'touch') {
-        if (mode === 'draw') extendStroke(e.clientX, e.clientY);
-        return;
+      stopFling();
+      if (e.touches.length >= 2) {
+        if (mode === 'draw') abortStroke(); // a second finger cancels the stroke
+        mode = 'scroll';
+        lastCY = centroidY(e.touches);
+        lastMoveT = performance.now();
+        vY = 0;
+      } else {
+        mode = 'draw';
+        startStroke(e.touches[0].clientX, e.touches[0].clientY);
       }
-      if (!touches.has(e.pointerId)) return;
-      touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
-      if (mode === 'scroll' && touches.size >= 2) {
-        const c = centroid();
-        const dy = lastCY - c.y; // finger up → content up → scroll down (native feel)
+      e.preventDefault(); // we drive draw + scroll; keep iOS from hijacking
+    }, { passive: false });
+    capture.addEventListener('touchmove', (e) => {
+      if (!active) return;
+      if (mode === 'scroll' && e.touches.length >= 2) {
+        const cy = centroidY(e.touches);
+        const dy = lastCY - cy; // fingers up → scroll down (natural direction)
         window.scrollBy(0, dy);
         const now = performance.now();
         const dt = now - lastMoveT;
-        if (dt > 0) vY = vY * 0.4 + (dy / dt) * 0.6; // smoothed velocity for the fling
+        if (dt > 0) vY = vY * 0.35 + (dy / dt) * 0.65; // velocity for the fling
         lastMoveT = now;
-        lastCX = c.x; lastCY = c.y;
-        return;
+        lastCY = cy;
+      } else if (mode === 'draw' && e.touches.length === 1) {
+        extendStroke(e.touches[0].clientX, e.touches[0].clientY);
       }
-      if (mode === 'draw' && touches.size === 1) extendStroke(e.clientX, e.clientY);
-    });
-    function onEnd(e: PointerEvent) {
-      if (e.pointerType !== 'touch') {
+      e.preventDefault();
+    }, { passive: false });
+    function onTouchEnd(e: TouchEvent) {
+      if (!active) return;
+      if (e.touches.length === 0) {
         if (mode === 'draw') endStroke();
+        else if (mode === 'scroll') startFling(); // release → glide with momentum
         mode = 'none';
-        return;
-      }
-      touches.delete(e.pointerId);
-      if (mode === 'draw') endStroke();
-      if (touches.size === 0) {
-        if (mode === 'scroll') startFling(); // let go → glide with momentum
-        mode = 'none';
-      } else if (mode === 'scroll' && touches.size >= 2) {
-        // fingers changed (e.g. 3→2) — re-baseline so scrolling stays smooth
-        const c = centroid();
-        lastCX = c.x; lastCY = c.y;
+      } else if (mode === 'scroll') {
+        // a finger lifted but others remain — re-baseline so scrolling stays
+        // smooth. Dropping to one finger stays in 'scroll' (idle) so the
+        // leftover finger never starts a stray stroke.
+        lastCY = centroidY(e.touches);
         lastMoveT = performance.now();
+      } else if (mode === 'draw') {
+        endStroke();
+        mode = 'none';
       }
-      // If a multi-finger gesture drops to one finger, we stay in 'scroll' (idle)
-      // until every finger lifts — the leftover finger must not start drawing.
     }
-    capture.addEventListener('pointerup', onEnd);
-    capture.addEventListener('pointercancel', onEnd);
+    capture.addEventListener('touchend', onTouchEnd, { passive: false });
+    capture.addEventListener('touchcancel', onTouchEnd, { passive: false });
 
     sizeSvg();
     window.addEventListener('resize', sizeSvg);

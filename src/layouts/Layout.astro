@@ -10,6 +10,11 @@ const {
   title = 'Adam Delaney — iOS Engineer',
   description = 'iOS engineer crafting native apps that feel alive. Selected work, writing, and ways to get in touch.',
 } = Astro.props;
+
+// Link-preview card (iMessage / social). Image on www to skip the apex→www
+// redirect hop; canonical/og:url stay on the clean apex domain.
+const canonical = 'https://adam0-o.dev/';
+const ogImage = 'https://www.adam0-o.dev/og.png';
 ---
 
 <!doctype html>
@@ -22,9 +27,23 @@ const {
 
     <title>{title}</title>
     <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+
+    <!-- Link preview (Open Graph + Twitter) -->
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
     <meta property="og:type" content="website" />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:site_name" content="Adam Delaney" />
+    <meta property="og:image" content={ogImage} />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="(0_o) — Adam Delaney, iOS Engineer" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={ogImage} />
     <meta name="theme-color" content="#0e0f0d" />
 
     <!-- Fonts -->
