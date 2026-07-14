@@ -1,0 +1,105 @@
+---
+// Hero attention-grabber: a big cycling ASCII face. Mixes horizontal faces
+// (o_o, =^.^=) with sideways emoticons (:) :D :3) that are rotated 90° CW so
+// they read upright — which makes them appear to type top-down. A green cursor
+// shows only while the face is actively typing/deleting.
+interface Props {
+  class?: string;
+}
+const { class: className = '' } = Astro.props;
+---
+
+<div class:list={['flex min-h-[8rem] items-center justify-center', className]} aria-hidden="true">
+  <div
+    id="hf-box"
+    class="relative inline-flex items-center font-display leading-none text-text text-[5.5rem] sm:text-[7rem] md:text-[8.5rem]"
+  >
+    <span id="hf-text">0_o</span>
+    <!-- caret is absolute (out of flow) so toggling it never shifts the face -->
+    <span
+      id="hf-caret"
+      class="absolute left-full top-1/2 -translate-y-1/2 text-phosphor"
+      style="margin-left: 0.06em; visibility: hidden">█</span>
+  </div>
+</div>
+
+<script>
+  const box = document.getElementById('hf-box');
+  const textEl = document.getElementById('hf-text');
+  const caret = document.getElementById('hf-caret');
+
+  if (box && textEl && caret) {
+    // r:1 = sideways emoticon → rotate 90° CW so it reads upright (types top-down)
+    const faces = [
+      // horizontal kaomoji (read straight) — 0_o first so the site opens on it
+      { t: '0_o' }, { t: 'o_o' }, { t: '0_0' }, { t: 'o_0' }, { t: 'o_O' },
+      { t: 'O_o' }, { t: 'O_O' }, { t: '-_-' },
+      { t: '._.' }, { t: '^_^' }, { t: '^.^' }, { t: 'o.o' }, { t: 'O.O' },
+      { t: '>_<' }, { t: '>.<' }, { t: '=^.^=' }, { t: '>^.^<' }, { t: '^o^' },
+      { t: '*_*' }, { t: '@_@' }, { t: 'x_x' }, { t: 'X_X' }, { t: '+_+' },
+      { t: '>_>' }, { t: '<_<' }, { t: '=_=' }, { t: '~_~' }, { t: 'u_u' },
+      { t: 'v_v' }, { t: 'T_T' }, { t: 'o_-' }, { t: '-_o' }, { t: '^_~' },
+      { t: '~_^' }, { t: '=o.o=' }, { t: '=^_^=' }, { t: 'n_n' }, { t: '\\o/' },
+      // sideways emoticons (rotated 90° CW so they read upright)
+      { t: ':)', r: 1 }, { t: ':(', r: 1 }, { t: ':D', r: 1 }, { t: ':P', r: 1 },
+      { t: ':p', r: 1 }, { t: ':O', r: 1 }, { t: ':o', r: 1 }, { t: ':|', r: 1 },
+      { t: ':/', r: 1 }, { t: ':\\', r: 1 }, { t: ':3', r: 1 }, { t: ':]', r: 1 },
+      { t: ':[', r: 1 }, { t: ':>', r: 1 }, { t: ':<', r: 1 }, { t: ':*', r: 1 },
+      { t: ':c', r: 1 }, { t: ';)', r: 1 }, { t: ';D', r: 1 }, { t: ';P', r: 1 },
+      { t: '=)', r: 1 }, { t: '=D', r: 1 }, { t: 'xD', r: 1 }, { t: 'XD', r: 1 },
+      { t: '8)', r: 1 }, { t: 'B)', r: 1 }, { t: ':}', r: 1 }, { t: ':{', r: 1 },
+      { t: ':-)', r: 1 }, { t: ':-D', r: 1 }, { t: ':-P', r: 1 }, { t: ';-)', r: 1 },
+      { t: '8-)', r: 1 }, { t: '>:)', r: 1 }, { t: ':^)', r: 1 },
+    ];
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    let fi = 0;
+    let paused = false;
+    let busy = false;
+    let holdTimer = 0;
+
+    const showCaret = () => (caret.style.visibility = 'visible');
+    const hideCaret = () => (caret.style.visibility = 'hidden');
+
+    const type = (then?: () => void) => {
+      busy = true;
+      showCaret();
+      box.style.transform = faces[fi].r ? 'rotate(90deg)' : 'none';
+      const s = faces[fi].t;
+      let i = 0;
+      const step = () => {
+        textEl.textContent = s.slice(0, i);
+        if (i < s.length) { i++; window.setTimeout(step, 95 + Math.random() * 70); }
+        else { busy = false; then?.(); }
+      };
+      step();
+    };
+    const del = (then?: () => void) => {
+      busy = true;
+      showCaret();
+      let i = (textEl.textContent ?? '').length;
+      const step = () => {
+        textEl.textContent = (textEl.textContent ?? '').slice(0, i);
+        if (i > 0) { i--; window.setTimeout(step, 48); }
+        else { busy = false; then?.(); }
+      };
+      step();
+    };
+    const afterType = () => {
+      hideCaret();
+      if (!paused) holdTimer = window.setTimeout(next, 2400);
+    };
+    // random shuffle (no immediate repeat) so it bounces between horizontal + sideways
+    const next = () => del(() => {
+      let n = fi;
+      while (n === fi && faces.length > 1) n = Math.floor(Math.random() * faces.length);
+      fi = n;
+      type(afterType);
+    });
+
+    textEl.textContent = faces[fi].t;
+    box.style.transform = faces[fi].r ? 'rotate(90deg)' : 'none';
+    if (!reduce) window.setTimeout(afterType, 1400);
+    // note: intentionally keeps cycling during annotate mode (no drawmode freeze)
+  }
+</script>

@@ -1,0 +1,65 @@
+---
+import SectionHeading from './SectionHeading.astro';
+import AsciiFace from './AsciiFace.astro';
+
+const rows = [
+  { label: 'email', value: 'adam.delaney11@gmail.com', href: 'mailto:adam.delaney11@gmail.com' },
+  { label: 'phone', value: '(248) 928-3888', href: 'tel:+12489283888' },
+  { label: 'linkedin', value: '/in/adam-delaney', href: 'https://linkedin.com/in/adam-delaney/' },
+  { label: 'github', value: '/adelaney11', href: 'https://github.com/adelaney11' },
+  { label: 'resume', value: 'résumé.pdf', href: '/resume.pdf' },
+];
+---
+
+<section id="contact" class="relative z-10 px-6 py-4">
+  <div class="mx-auto w-full max-w-5xl">
+    <details open class="section-fold is-open">
+      <SectionHeading index="[ 04 // contact ]" title="contact" />
+      <div class="section-body">
+        <div class="pt-10 pb-16">
+          <h2 class="max-w-3xl font-display text-5xl leading-[0.9] tracking-wide text-text sm:text-7xl" data-reveal>
+            LET'S BUILD SOMETHING<br />THAT FEELS ALIVE.
+          </h2>
+
+          <dl class="mt-12 max-w-2xl font-mono text-sm" data-reveal style="transition-delay: 100ms">
+            {
+              rows.map((r) => (
+                <div class="flex items-baseline gap-3 border-b border-dotted border-line py-3">
+                  <dt class="w-24 shrink-0 text-dim">
+                    <span class="text-phosphor">&gt;</span> {r.label}
+                  </dt>
+                  <dd class="min-w-0 flex-1 truncate">
+                    <a
+                      href={r.href}
+                      target={r.href.startsWith('http') ? '_blank' : undefined}
+                      rel={r.href.startsWith('http') ? 'noopener' : undefined}
+                      class="text-text underline decoration-dotted underline-offset-4 transition-colors duration-200 hover:text-phosphor"
+                    >
+                      {r.value}
+                    </a>
+                  </dd>
+                  <span class="text-dim/50 transition-transform duration-200 hover:translate-x-0.5">↗</span>
+                </div>
+              ))
+            }
+          </dl>
+
+          <div class="mt-10 flex items-center gap-3 font-mono text-xs text-dim" data-reveal>
+            <AsciiFace class="text-xl" />
+            <span>los angeles, ca — available worldwide / remote</span>
+          </div>
+        </div>
+      </div>
+    </details>
+  </div>
+</section>
+
+<footer class="relative z-10 border-t border-line px-6 py-8">
+  <div class="mx-auto flex w-full max-w-5xl flex-col items-center gap-3 text-center font-mono text-[0.7rem] text-dim sm:flex-row sm:justify-between sm:text-left">
+    <span>© 2026 adam delaney · best viewed in netscape @ 800×600</span>
+    <span class="border border-line px-2 py-0.5 tracking-[0.3em] text-phosphor/80">
+      000137
+    </span>
+    <a href="#top" class="transition-colors duration-200 hover:text-phosphor">▲ top</a>
+  </div>
+</footer>

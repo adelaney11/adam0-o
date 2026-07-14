@@ -1,0 +1,82 @@
+---
+import HeroFace from './HeroFace.astro';
+// Hero. Big cycling ASCII face is the attention-grabber: right column on
+// desktop, ABOVE the intro on mobile. Left/second column is the intro.
+---
+
+<section id="top" class="relative flex min-h-svh flex-col justify-center px-6 pt-24 pb-16">
+  <div
+    class="mx-auto grid w-full max-w-5xl grid-cols-1 gap-x-10 gap-y-12 md:grid-cols-[minmax(0,1fr)_24rem]"
+  >
+    <!-- FACE (DOM first → above the intro on mobile) -->
+    <div
+      class="rise flex min-w-0 flex-col items-center gap-8 md:col-start-2 md:row-start-1 md:items-stretch md:gap-0"
+      style="animation-delay: 0.15s"
+    >
+      <HeroFace class="w-full md:min-h-0 md:flex-1" />
+      <p class="hidden max-w-[15rem] text-center font-mono text-[0.72rem] leading-relaxed text-dim md:block">
+        press <kbd class="border border-line px-1 py-0.5">A</kbd> to annotate this
+        page — scribble anywhere; it sticks as you scroll.
+      </p>
+    </div>
+
+    <!-- INTRO -->
+    <div class="flex flex-col justify-center md:col-start-1 md:row-start-1">
+      <div
+        class="rise font-mono text-xs uppercase tracking-[0.25em] text-dim"
+        style="animation-delay: 0.05s"
+      >
+        adam_delaney // los angeles, ca
+      </div>
+
+      <p class="rise mt-8 font-mono text-sm text-phosphor" style="animation-delay: 0.15s">
+        &gt; whoami
+      </p>
+      <h1
+        class="rise mt-1 font-display text-6xl leading-[0.85] tracking-wide text-text sm:text-7xl md:text-8xl"
+        style="animation-delay: 0.2s"
+      >
+        ADAM DELANEY
+      </h1>
+      <p
+        class="rise mt-2 font-display text-3xl tracking-wide text-dim sm:text-4xl"
+        style="animation-delay: 0.3s"
+      >
+        iOS ENGINEER · 5+ YEARS
+      </p>
+
+      <p
+        class="rise mt-8 max-w-xl font-mono text-sm leading-relaxed text-text/80"
+        style="animation-delay: 0.42s"
+      >
+        I ship Swift, SwiftUI, and UIKit apps across fintech, edtech, healthcare,
+        and consumer — with end-to-end ownership from architecture through launch.
+        Currently building <a
+          href="https://deskpop.online"
+          target="_blank"
+          rel="noopener"
+          class="text-phosphor underline decoration-dotted underline-offset-4 transition-colors hover:text-text"
+          >deskpop</a>. This page is a little alive too.
+      </p>
+
+      <div class="rise mt-10 flex flex-wrap items-center gap-3" style="animation-delay: 0.54s">
+        <a
+          href="#experience"
+          class="bevel px-5 py-2.5 font-mono text-sm uppercase tracking-wider text-text transition-colors duration-200 hover:border-phosphor hover:text-phosphor"
+        >
+          [ view_work ]
+        </a>
+        <a
+          href="#contact"
+          class="px-5 py-2.5 font-mono text-sm uppercase tracking-wider text-dim transition-colors duration-200 hover:text-text"
+        >
+          [ get_in_touch ]
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <div class="absolute inset-x-0 bottom-6 hidden justify-center md:flex">
+    <span class="font-mono text-xs tracking-[0.3em] text-dim/50">▼ scroll</span>
+  </div>
+</section>

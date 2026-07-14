@@ -1,0 +1,110 @@
+---
+import Layout from '../layouts/Layout.astro';
+import Backdrop from '../components/Backdrop.astro';
+import CursorTrail from '../components/CursorTrail.astro';
+import Nav from '../components/Nav.astro';
+import Hero from '../components/Hero.astro';
+import Experience from '../components/Experience.astro';
+import Work from '../components/Work.astro';
+import About from '../components/About.astro';
+import Contact from '../components/Contact.astro';
+import DrawLayer from '../components/DrawLayer.astro';
+---
+
+<Layout>
+  <Nav />
+
+  <main class="relative z-10">
+    <Hero />
+    <Experience />
+    <Work />
+    <About />
+    <Contact />
+  </main>
+
+  <Backdrop />
+  <CursorTrail />
+  <DrawLayer />
+</Layout>
+
+<script>
+  // Reveal sections as they scroll into view.
+  const io = new IntersectionObserver(
+    (entries) => {
+      entries.forEach((e) => {
+        if (e.isIntersecting) {
+          e.target.classList.add('is-in');
+          io.unobserve(e.target);
+        }
+      });
+    },
+    { rootMargin: '0px 0px -10% 0px', threshold: 0.12 }
+  );
+  document.querySelectorAll('[data-reveal]').forEach((el) => io.observe(el));
+
+  // Smooth collapse / expand for section folds.
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  document.querySelectorAll<HTMLDetailsElement>('details.section-fold').forEach((d) => {
+    const summary = d.querySelector('summary');
+    const body = d.querySelector<HTMLElement>('.section-body');
+    if (!summary || !body) return;
+
+    summary.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (d.dataset.animating) return;
+      const opening = !d.classList.contains('is-open');
+
+      if (reduceMotion) {
+        d.open = opening;
+        d.classList.toggle('is-open', opening);
+        return;
+      }
+
+      d.dataset.animating = '1';
+      body.style.overflow = 'hidden';
+      if (opening) {
+        d.open = true;
+        d.classList.add('is-open');
+        body.style.height = '0px';
+        body.getBoundingClientRect(); // force reflow
+        body.style.transition = 'height 0.38s cubic-bezier(0.16, 1, 0.3, 1)';
+        body.style.height = body.scrollHeight + 'px';
+      } else {
+        d.classList.remove('is-open');
+        body.style.height = body.scrollHeight + 'px';
+        body.getBoundingClientRect();
+        body.style.transition = 'height 0.38s cubic-bezier(0.16, 1, 0.3, 1)';
+        body.style.height = '0px';
+      }
+
+      const done = (ev: TransitionEvent) => {
+        if (ev.propertyName !== 'height') return;
+        body.style.transition = '';
+        body.style.height = '';
+        body.style.overflow = '';
+        if (!opening) d.open = false;
+        delete d.dataset.animating;
+        body.removeEventListener('transitionend', done);
+      };
+      body.addEventListener('transitionend', done);
+    });
+  });
+
+  // Following an in-page link (nav / CTA) should expand its section if the user
+  // has collapsed it.
+  const ensureOpen = (d: HTMLDetailsElement | null | undefined) => {
+    if (!d || d.classList.contains('is-open')) return;
+    delete d.dataset.animating;
+    const b = d.querySelector<HTMLElement>('.section-body');
+    if (b) { b.style.transition = ''; b.style.height = ''; b.style.overflow = ''; }
+    d.open = true;
+    d.classList.add('is-open');
+  };
+  document.querySelectorAll<HTMLAnchorElement>('a[href^="#"]').forEach((a) => {
+    a.addEventListener('click', () => {
+      const id = (a.getAttribute('href') || '').slice(1);
+      const sec = id ? document.getElementById(id) : null;
+      ensureOpen(sec?.querySelector<HTMLDetailsElement>('details.section-fold'));
+    });
+  });
+</script>

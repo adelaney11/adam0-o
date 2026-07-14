@@ -1,0 +1,18 @@
+---
+// Rendered inside a <details> as its <summary> — click to collapse the section.
+interface Props {
+  index: string;
+  title: string;
+}
+const { index, title } = Astro.props;
+---
+
+<summary
+  class="section-summary flex cursor-pointer items-baseline justify-between gap-4 border-b border-line pb-3 transition-opacity duration-200 hover:opacity-80"
+  data-reveal
+>
+  <h2 class="font-display text-4xl lowercase tracking-wide text-text sm:text-5xl">
+    <span class="fold-ind mr-2 text-phosphor"></span>{title}
+  </h2>
+  <span class="font-mono text-xs text-dim tabular-nums">{index}</span>
+</summary>

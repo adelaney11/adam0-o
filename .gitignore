@@ -1,0 +1,22 @@
+# build output
+dist/
+.astro/
+
+# dependencies
+node_modules/
+
+# logs
+*-debug.log*
+npm-debug.log*
+pnpm-debug.log*
+
+# environment
+.env
+.env.*
+!.env.example
+
+# vercel
+.vercel
+
+# macOS
+.DS_Store

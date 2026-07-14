@@ -1,0 +1,131 @@
+---
+// The signature face: (0_o). Eyes track the cursor, it blinks on its own,
+// widens over links, and squints in draw mode. Size it with font-size.
+interface Props {
+  class?: string;
+}
+const { class: className = '' } = Astro.props;
+---
+
+<span class:list={['af font-mono leading-none text-phosphor select-none', className]} data-state="idle">
+  <span class="af-b">(</span>
+  <span class="af-eye"><span class="af-pupil" data-eye="l">0</span></span>
+  <span class="af-mouth">_</span>
+  <span class="af-eye"><span class="af-pupil" data-eye="r">o</span></span>
+  <span class="af-b">)</span>
+</span>
+
+<style>
+  .af {
+    display: inline-flex;
+    align-items: center;
+    white-space: nowrap;
+  }
+  .af-eye {
+    position: relative;
+    display: inline-flex;
+    width: 0.6em;
+    height: 0.9em;
+    align-items: center;
+    justify-content: center;
+  }
+  .af-pupil {
+    display: inline-block;
+    transition:
+      transform 0.14s cubic-bezier(0.16, 1, 0.3, 1),
+      opacity 0.08s linear;
+    will-change: transform;
+  }
+  .af-mouth {
+    display: inline-block;
+    margin: 0 0.02em;
+  }
+  .af[data-blink='1'] .af-pupil {
+    transform: scaleY(0.14) !important;
+  }
+  .af[data-state='draw'] {
+    filter: drop-shadow(0 0 4px color-mix(in srgb, var(--color-phosphor) 55%, transparent));
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .af-pupil { transition: none; }
+  }
+</style>
+
+<script>
+  function initFaces() {
+    const faces = Array.from(document.querySelectorAll<HTMLElement>('.af'));
+    if (!faces.length) return;
+
+    const pointer = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+
+    // eyes per state: [left, right]
+    const EYES: Record<string, [string, string]> = {
+      idle: ['0', 'o'],
+      happy: ['0', '0'],
+      draw: ['o', 'o'],
+    };
+
+    function applyState(face: HTMLElement, state: string) {
+      face.dataset.state = state;
+      const [l, r] = EYES[state] ?? EYES.idle;
+      const lp = face.querySelector<HTMLElement>('[data-eye="l"]');
+      const rp = face.querySelector<HTMLElement>('[data-eye="r"]');
+      if (lp) lp.textContent = l;
+      if (rp) rp.textContent = r;
+    }
+
+    window.addEventListener(
+      'pointermove',
+      (e) => {
+        pointer.x = e.clientX;
+        pointer.y = e.clientY;
+      },
+      { passive: true }
+    );
+
+    document.addEventListener('pointerover', (e) => {
+      const interactive = (e.target as HTMLElement)?.closest?.('a, button');
+      faces.forEach((f) => {
+        if (f.dataset.state !== 'draw') applyState(f, interactive ? 'happy' : 'idle');
+      });
+    });
+
+    window.addEventListener('drawmode', (e) => {
+      const on = (e as CustomEvent).detail.active;
+      faces.forEach((f) => applyState(f, on ? 'draw' : 'idle'));
+    });
+
+    // eyes follow the cursor
+    function track() {
+      faces.forEach((face) => {
+        const fontPx = parseFloat(getComputedStyle(face).fontSize) || 16;
+        const max = fontPx * 0.15;
+        face.querySelectorAll<HTMLElement>('.af-eye').forEach((eye) => {
+          const r = eye.getBoundingClientRect();
+          const dx = pointer.x - (r.left + r.width / 2);
+          const dy = pointer.y - (r.top + r.height / 2);
+          const d = Math.hypot(dx, dy) || 1;
+          const px = (dx / d) * Math.min(max, d * 0.08);
+          const py = (dy / d) * Math.min(max, d * 0.08);
+          const pupil = eye.firstElementChild as HTMLElement;
+          if (face.dataset.blink !== '1') {
+            pupil.style.transform = `translate(${px.toFixed(2)}px, ${py.toFixed(2)}px)`;
+          }
+        });
+      });
+      requestAnimationFrame(track);
+    }
+    requestAnimationFrame(track);
+
+    // occasional blink
+    function blink() {
+      faces.forEach((f) => (f.dataset.blink = '1'));
+      setTimeout(() => faces.forEach((f) => (f.dataset.blink = '0')), 120);
+      setTimeout(blink, 2400 + Math.floor(performance.now() % 3400));
+    }
+    setTimeout(blink, 1600);
+  }
+
+  if (document.readyState !== 'loading') initFaces();
+  else document.addEventListener('DOMContentLoaded', initFaces);
+</script>

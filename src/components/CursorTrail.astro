@@ -1,0 +1,90 @@
+---
+// A boiling ink trail that follows the mouse and dissipates behind it — a nudge
+// that this page is drawable. Desktop mouse only; off while annotating and under
+// reduced-motion.
+---
+
+<canvas
+  id="cursor-trail"
+  class="pointer-events-none fixed inset-0 z-20 h-full w-full"
+  aria-hidden="true"></canvas>
+
+<script>
+  const canvas = document.getElementById('cursor-trail') as HTMLCanvasElement | null;
+  const ctx = canvas?.getContext('2d');
+  const fine = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  if (canvas && ctx && fine && !reduce) {
+    const LIFE = 460; // ms a point lives before it fully fades
+    let dpr = Math.min(window.devicePixelRatio || 1, 2);
+    let annotate = false;
+    type P = { x: number; y: number; t: number };
+    let pts: P[] = [];
+
+    function resize() {
+      dpr = Math.min(window.devicePixelRatio || 1, 2);
+      canvas!.width = Math.floor(window.innerWidth * dpr);
+      canvas!.height = Math.floor(window.innerHeight * dpr);
+      ctx!.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+    resize();
+    window.addEventListener('resize', resize);
+
+    window.addEventListener(
+      'pointermove',
+      (e) => {
+        if (annotate || e.pointerType !== 'mouse') return;
+        const t = performance.now();
+        // recover intermediate positions the browser batched, so fast moves stay dense
+        const coalesced =
+          typeof (e as any).getCoalescedEvents === 'function' ? (e as any).getCoalescedEvents() : null;
+        if (coalesced && coalesced.length) {
+          for (const ev of coalesced) pts.push({ x: ev.clientX, y: ev.clientY, t });
+        } else {
+          pts.push({ x: e.clientX, y: e.clientY, t });
+        }
+        if (pts.length > 160) pts.splice(0, pts.length - 160);
+      },
+      { passive: true }
+    );
+
+    window.addEventListener('drawmode', (e) => {
+      annotate = (e as CustomEvent).detail.active;
+      if (annotate) pts = [];
+    });
+
+    function frame(now: number) {
+      ctx!.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx!.clearRect(0, 0, window.innerWidth, window.innerHeight);
+      while (pts.length && now - pts[0].t > LIFE) pts.shift();
+
+      if (!annotate && pts.length >= 3) {
+        ctx!.lineCap = 'round';
+        ctx!.lineJoin = 'round';
+        ctx!.globalCompositeOperation = 'source-over';
+        ctx!.shadowColor = 'rgba(236, 232, 216, 0.45)';
+        // smooth: quadratic curves through midpoints (no jitter → clean trail)
+        for (let i = 1; i < pts.length - 1; i++) {
+          const a = Math.max(0, 1 - (now - pts[i].t) / LIFE);
+          if (a <= 0) continue;
+          const m1x = (pts[i - 1].x + pts[i].x) / 2;
+          const m1y = (pts[i - 1].y + pts[i].y) / 2;
+          const m2x = (pts[i].x + pts[i + 1].x) / 2;
+          const m2y = (pts[i].y + pts[i + 1].y) / 2;
+          ctx!.strokeStyle = `rgba(236, 232, 216, ${(a * 0.5).toFixed(3)})`;
+          ctx!.shadowBlur = 6 * a;
+          ctx!.lineWidth = 2.6 * a + 0.5;
+          ctx!.beginPath();
+          ctx!.moveTo(m1x, m1y);
+          ctx!.quadraticCurveTo(pts[i].x, pts[i].y, m2x, m2y);
+          ctx!.stroke();
+        }
+        ctx!.shadowBlur = 0;
+        ctx!.globalCompositeOperation = 'source-over';
+      }
+      requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+  }
+</script>

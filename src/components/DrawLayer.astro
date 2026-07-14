@@ -1,0 +1,279 @@
+---
+// Annotate-the-page layer. Press A to annotate, C to clear, D when done, ⌘/Ctrl+Z
+// to undo — or use the floating button + toolbar (mobile). Pick a color + weight.
+//
+// Rendering is SVG in the document, so ink scrolls NATIVELY with the page and
+// sits UNDER the header (z-20 < nav). The ink "boils" — 3 pre-jittered variants
+// cycled at 10fps (Blipnote algorithm).
+
+const colors = [
+  '#ece8d8', // chalk
+  '#8bff9b', // phosphor green
+  '#ffb454', // amber
+  '#58e6ff', // cyan
+  '#ff5c8a', // magenta
+  '#b58cff', // violet
+];
+const widths = [
+  { v: 1.6, label: 'thin' },
+  { v: 2.8, label: 'medium' },
+  { v: 5, label: 'thick' },
+];
+---
+
+<svg
+  id="draw-svg"
+  class="pointer-events-none absolute left-0 top-0 z-20"
+  style="overflow: visible"
+  aria-hidden="true"></svg>
+
+<div id="draw-capture" class="pointer-events-none fixed inset-0 z-40"></div>
+
+<!-- entry button -->
+<button
+  id="draw-toggle"
+  type="button"
+  aria-pressed="false"
+  class="bevel fixed bottom-5 right-5 z-50 flex items-center gap-2 rounded-none px-3.5 py-2.5 font-mono text-xs uppercase tracking-wider text-dim transition-colors duration-200 hover:text-text focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor"
+>
+  <span id="draw-toggle-face" class="text-phosphor">(0_o)</span>
+  <span>annotate</span>
+</button>
+
+<!-- toolbar: full-width bottom bar on mobile, compact bottom-right on desktop -->
+<div
+  id="annotate-tools"
+  class="fixed z-50 hidden border-line bg-panel/95 font-mono text-xs backdrop-blur-md inset-x-0 bottom-0 border-t px-4 py-4 sm:inset-x-auto sm:bottom-5 sm:right-5 sm:rounded-none sm:border sm:bg-panel/85 sm:p-2.5"
+  style="--ink: #ece8d8"
+>
+  <div class="mx-auto flex max-w-md flex-col gap-4 sm:max-w-none sm:gap-2.5">
+    <div id="swatches" class="flex items-center justify-between sm:justify-start sm:gap-1.5">
+      {
+        colors.map((c) => (
+          <button
+            class="swatch h-9 w-9 rounded-none border border-line sm:h-5 sm:w-5"
+            data-color={c}
+            style={`background:${c}`}
+            aria-label={`ink color ${c}`}
+          />
+        ))
+      }
+    </div>
+    <div class="flex items-center justify-between gap-3 sm:justify-start sm:gap-2">
+      <div id="widths" class="flex items-center gap-2 sm:gap-1">
+        {
+          widths.map((w) => (
+            <button
+              class="wbtn flex h-9 w-12 items-center justify-center border border-line sm:h-6 sm:w-8"
+              data-width={w.v}
+              aria-label={w.label}
+            >
+              <span style={`display:block;width:18px;height:${w.v}px;background:var(--ink);border-radius:2px`} />
+            </button>
+          ))
+        }
+      </div>
+      <div class="flex items-center gap-1.5 uppercase tracking-wider sm:gap-1">
+        <button id="btn-undo" class="px-3 py-2 text-dim transition-colors hover:text-text sm:px-1.5 sm:py-1">undo</button>
+        <button id="btn-clear" class="px-3 py-2 text-dim transition-colors hover:text-text sm:px-1.5 sm:py-1">clear</button>
+        <button id="btn-done" class="border border-phosphor/50 px-4 py-2 text-phosphor transition-colors hover:bg-phosphor/10 sm:border-0 sm:px-1.5 sm:py-1">done</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .swatch { transition: transform 0.12s ease; }
+  .swatch.is-sel { outline: 2px solid var(--color-text); outline-offset: 2px; transform: scale(1.1); }
+  .wbtn.is-sel { border-color: var(--color-text); }
+</style>
+
+<script>
+  const SVGNS = 'http://www.w3.org/2000/svg';
+  const svg = document.getElementById('draw-svg') as unknown as SVGSVGElement | null;
+  const capture = document.getElementById('draw-capture');
+  const toggle = document.getElementById('draw-toggle') as HTMLButtonElement | null;
+  const tools = document.getElementById('annotate-tools');
+  const faceEl = document.getElementById('draw-toggle-face');
+
+  if (svg && capture && toggle && tools) {
+    const BOIL_FRAMES = 3;
+    const BOIL_MS = 100;
+    const FACTOR_SCALE = 1.8;
+    const DIST_DIVISOR = 25;
+    const MIN_F = 0.1;
+    const MAX_F = 0.8;
+    const MAX_JITTER = 4;
+    const SMALL_DIST = 5;
+
+    type Pt = { x: number; y: number };
+    type Line = { g: SVGGElement; halo: SVGPolylineElement; core: SVGPolylineElement };
+    type Stroke = Line & { variants: Pt[][]; color: string; width: number };
+
+    const strokes: Stroke[] = [];
+    let current: (Line & { pts: Pt[]; color: string; width: number }) | null = null;
+    let boilIndex = 0;
+    let active = false;
+    let curColor = '#ece8d8';
+    let curWidth = 2.8;
+    let lastH = -1;
+
+    function jitter(pts: Pt[]): Pt[] {
+      const out: Pt[] = [];
+      for (let i = 0; i < pts.length; i++) {
+        if (i === 0) { out.push({ x: pts[i].x, y: pts[i].y }); continue; }
+        const last = pts[i - 1];
+        const d = Math.hypot(pts[i].x - last.x, pts[i].y - last.y);
+        let f = Math.max(MIN_F, Math.min(d / DIST_DIVISOR, MAX_F));
+        let amt = Math.min(FACTOR_SCALE * f, MAX_JITTER);
+        if (d < SMALL_DIST) amt *= d / SMALL_DIST;
+        out.push({
+          x: pts[i].x + (Math.random() - 0.5) * 2 * amt,
+          y: pts[i].y + (Math.random() - 0.5) * 2 * amt,
+        });
+      }
+      return out;
+    }
+    function makeVariants(pts: Pt[]): Pt[][] {
+      const v: Pt[][] = [];
+      for (let i = 0; i < BOIL_FRAMES; i++) v.push(jitter(pts));
+      return v;
+    }
+    function ptsStr(pts: Pt[]) {
+      let s = '';
+      for (let i = 0; i < pts.length; i++) {
+        s += pts[i].x.toFixed(1) + ',' + pts[i].y.toFixed(1);
+        if (i < pts.length - 1) s += ' ';
+      }
+      return s;
+    }
+    function mkLine(color: string, width: number, halo: boolean): SVGPolylineElement {
+      const pl = document.createElementNS(SVGNS, 'polyline');
+      pl.setAttribute('fill', 'none');
+      pl.setAttribute('stroke', color);
+      pl.setAttribute('stroke-width', String(halo ? +(width * 2.4).toFixed(2) : width));
+      pl.setAttribute('stroke-linecap', 'round');
+      pl.setAttribute('stroke-linejoin', 'round');
+      if (halo) pl.setAttribute('stroke-opacity', '0.16');
+      return pl;
+    }
+    function mkGroup(color: string, width: number): Line {
+      const g = document.createElementNS(SVGNS, 'g') as SVGGElement;
+      const halo = mkLine(color, width, true);
+      const core = mkLine(color, width, false);
+      g.appendChild(halo);
+      g.appendChild(core);
+      return { g, halo, core };
+    }
+    function setPoints(l: Line, pts: Pt[]) {
+      const s = ptsStr(pts);
+      l.halo.setAttribute('points', s);
+      l.core.setAttribute('points', s);
+    }
+    function sizeSvg() {
+      const w = document.documentElement.clientWidth;
+      const h = Math.max(document.documentElement.scrollHeight, window.innerHeight);
+      if (Math.abs(h - lastH) < 2 && svg!.getAttribute('width') === String(w)) return;
+      lastH = h;
+      svg!.setAttribute('width', String(w));
+      svg!.setAttribute('height', String(h));
+      svg!.style.width = w + 'px';
+      svg!.style.height = h + 'px';
+    }
+
+    setInterval(() => {
+      if (!strokes.length) return;
+      boilIndex = (boilIndex + 1) % BOIL_FRAMES;
+      for (const s of strokes) setPoints(s, s.variants[boilIndex]);
+    }, BOIL_MS);
+
+    function setActive(next: boolean) {
+      if (active === next) return;
+      active = next;
+      capture!.style.pointerEvents = active ? 'auto' : 'none';
+      capture!.style.touchAction = active ? 'none' : '';
+      capture!.style.cursor = active ? 'crosshair' : '';
+      document.body.style.userSelect = active ? 'none' : '';
+      toggle!.setAttribute('aria-pressed', String(active));
+      toggle!.classList.toggle('hidden', active);
+      tools!.classList.toggle('hidden', !active);
+      if (faceEl) faceEl.textContent = active ? '(0_0)' : '(0_o)';
+      window.dispatchEvent(new CustomEvent('drawmode', { detail: { active } }));
+    }
+    function clearAll() {
+      for (const s of strokes) s.g.remove();
+      strokes.length = 0;
+      if (current) { current.g.remove(); current = null; }
+    }
+    function undo() {
+      const s = strokes.pop();
+      if (s) s.g.remove();
+    }
+
+    // toolbar wiring
+    const swatches = Array.from(tools.querySelectorAll<HTMLElement>('.swatch'));
+    const wbtns = Array.from(tools.querySelectorAll<HTMLElement>('.wbtn'));
+    function selectColor(el: HTMLElement) {
+      curColor = el.dataset.color!;
+      tools!.style.setProperty('--ink', curColor);
+      swatches.forEach((s) => s.classList.toggle('is-sel', s === el));
+    }
+    function selectWidth(el: HTMLElement) {
+      curWidth = parseFloat(el.dataset.width!);
+      wbtns.forEach((w) => w.classList.toggle('is-sel', w === el));
+    }
+    swatches.forEach((s) => s.addEventListener('click', () => selectColor(s)));
+    wbtns.forEach((w) => w.addEventListener('click', () => selectWidth(w)));
+    if (swatches[0]) selectColor(swatches[0]);
+    if (wbtns[1]) selectWidth(wbtns[1]);
+
+    tools.querySelector('#btn-undo')?.addEventListener('click', undo);
+    tools.querySelector('#btn-clear')?.addEventListener('click', clearAll);
+    tools.querySelector('#btn-done')?.addEventListener('click', () => setActive(false));
+    toggle.addEventListener('click', () => setActive(!active));
+
+    window.addEventListener('keydown', (e) => {
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+      const k = e.key.toLowerCase();
+      if ((e.metaKey || e.ctrlKey) && k === 'z') { if (active) { e.preventDefault(); undo(); } return; }
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (k === 'a') setActive(true);
+      else if (k === 'd' || e.key === 'Escape') setActive(false);
+      else if (k === 'c' && active) clearAll();
+    });
+
+    capture.addEventListener('pointerdown', (e) => {
+      if (!active) return;
+      const x = e.clientX + window.scrollX;
+      const y = e.clientY + window.scrollY;
+      const line = mkGroup(curColor, curWidth);
+      svg!.appendChild(line.g);
+      current = { ...line, pts: [{ x, y }], color: curColor, width: curWidth };
+      setPoints(current, [{ x, y }, { x: x + 0.1, y }]);
+      capture!.setPointerCapture(e.pointerId);
+    });
+    capture.addEventListener('pointermove', (e) => {
+      if (!active || !current) return;
+      current.pts.push({ x: e.clientX + window.scrollX, y: e.clientY + window.scrollY });
+      setPoints(current, current.pts);
+    });
+    function endStroke() {
+      if (current) {
+        if (current.pts.length === 1) current.pts.push({ x: current.pts[0].x + 0.1, y: current.pts[0].y });
+        const variants = makeVariants(current.pts);
+        strokes.push({ g: current.g, halo: current.halo, core: current.core, variants, color: current.color, width: current.width });
+        setPoints(strokes[strokes.length - 1], variants[boilIndex]);
+        current = null;
+      }
+    }
+    capture.addEventListener('pointerup', endStroke);
+    capture.addEventListener('pointercancel', endStroke);
+
+    sizeSvg();
+    window.addEventListener('resize', sizeSvg);
+    new ResizeObserver(() => sizeSvg()).observe(document.body);
+    if ((document as any).fonts?.ready) (document as any).fonts.ready.then(sizeSvg);
+    window.addEventListener('load', () => { sizeSvg(); setTimeout(sizeSvg, 700); });
+  }
+</script>

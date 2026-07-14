@@ -1,0 +1,123 @@
+---
+import SectionHeading from './SectionHeading.astro';
+
+const jobs = [
+  {
+    company: 'deskpop',
+    href: 'https://deskpop.online',
+    role: 'iOS Developer',
+    dates: 'Jan 2026 — Present',
+    bullets: [
+      'Shipped a consumer iOS app to the App Store: daily trick challenges, video uploads, and community voting.',
+      'Built full-stack — SwiftUI front end with Swift Package Manager modularization, a Convex real-time backend with auth, and video storage via Cloudflare R2.',
+      'Owned product iteration, backend integration, TestFlight feedback, and App Store launch + post-release updates.',
+    ],
+  },
+  {
+    company: 'ClassDojo',
+    role: 'iOS Developer',
+    dates: 'Jul 2025 — Nov 2025',
+    bullets: [
+      "Strengthened the WebView ↔ iOS audio bridge powering Sparks' interactive early-reading lessons — reliable playback, recording, and sound-matching via AVFoundation.",
+      'Profiled and optimized the audio pipeline with Instruments across caching, playback queues, and interruption handling to cut latency.',
+      'Delivered cross-repo fixes across Swift and JavaScript layers; partnered with product, design, and data on onboarding and subscription experiments.',
+    ],
+  },
+  {
+    company: 'Robinhood',
+    role: 'iOS Developer',
+    dates: 'Aug 2024 — Jun 2025',
+    bullets: [
+      "Built and shipped end-to-end joint brokerage asset-transfer flows using Swift/UIKit and Robinhood's design system.",
+      'Added server-driven UI by building Bonfire Python APIs for dynamic action sheets and time-sensitive banners — no App Store release required.',
+      'Modernized ACATS and bonus claw-back flows through promotion experiments and multi-bonus logic refactors, reinforcing testing and release quality.',
+    ],
+  },
+  {
+    company: 'Acorns',
+    role: 'iOS Developer',
+    dates: 'Jul 2022 — Sep 2023',
+    bullets: [
+      'Improved checking-account onboarding, reducing drop-off and supporting stronger banking-adoption conversion.',
+      'Built secure money-movement features and ran A/B tests to identify UX friction across onboarding and transfer flows.',
+    ],
+  },
+  {
+    company: 'Genentech',
+    role: 'iOS Developer',
+    dates: 'Jun 2020 — Jun 2022',
+    bullets: [
+      'Rebuilt a reagent-management app in SwiftUI with MVVM for iPad kiosk workflows used by scientists and lab technicians.',
+      'Integrated Bluetooth barcode scanning and real-time backend sync for reagent lookup, tracking, and state changes.',
+    ],
+  },
+];
+---
+
+<section id="experience" class="relative z-10 px-6 py-4">
+  <div class="mx-auto w-full max-w-5xl">
+    <details open class="section-fold is-open">
+      <SectionHeading index="[ 01 // experience ]" title="experience" />
+      <div class="section-body">
+        <div class="pt-10 pb-16">
+          <div class="flex flex-col">
+            {
+              jobs.map((job, i) => (
+                <article
+                  class="group grid gap-x-8 gap-y-3 border-b border-line py-7 md:grid-cols-[1fr_auto]"
+                  data-reveal
+                  style={`transition-delay:${i * 50}ms`}
+                >
+                  <div>
+                    <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
+                      <span class="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden border border-line bg-panel/40">
+                        <img
+                          src={`/experience/${job.company.toLowerCase().replace(/\s+/g, '')}.png`}
+                          alt={`${job.company} logo`}
+                          loading="lazy"
+                          class="h-full w-full object-contain p-1 transition duration-300 group-hover:opacity-100 group-hover:grayscale-0 [@media(hover:hover)]:opacity-75 [@media(hover:hover)]:grayscale"
+                        />
+                      </span>
+                      <h3 class="font-display text-3xl tracking-wide text-text sm:text-4xl">
+                        {job.href ? (
+                          <a
+                            href={job.href}
+                            target="_blank"
+                            rel="noopener"
+                            class="underline decoration-dotted underline-offset-[6px] transition-colors hover:text-phosphor"
+                          >
+                            {job.company}
+                          </a>
+                        ) : (
+                          job.company
+                        )}
+                      </h3>
+                      <span class="font-mono text-xs uppercase tracking-wider text-phosphor">
+                        {job.role}
+                      </span>
+                    </div>
+                    <ul class="mt-4 max-w-2xl space-y-2 font-mono text-sm leading-relaxed text-dim">
+                      {job.bullets.map((b) => (
+                        <li class="flex gap-2.5">
+                          <span class="mt-px shrink-0 text-phosphor/70">▸</span>
+                          <span>{b}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div class="font-mono text-xs tracking-wider text-dim md:pt-2 md:text-right">
+                    {job.dates}
+                  </div>
+                </article>
+              ))
+            }
+          </div>
+
+          <p class="mt-6 font-mono text-xs text-dim/70" data-reveal>
+            full history in the <a href="/resume.pdf" class="text-phosphor underline decoration-dotted underline-offset-4 hover:text-text">résumé.pdf</a>
+          </p>
+        </div>
+      </div>
+    </details>
+  </div>
+</section>
