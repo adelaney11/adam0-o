@@ -19,6 +19,35 @@ const widths = [
   { v: 2.8, label: 'medium' },
   { v: 5, label: 'thick' },
 ];
+
+// Pixel-art pencil for the annotate button — no external asset, just a 12×12
+// grid of `#` cells rendered as crisp SVG rects. Diagonal, eraser end top-right,
+// sharpened point bottom-left (reads like ✏️).
+const PENCIL_PIX = [
+  '........###.',
+  '........###.',
+  '.......###..',
+  '......###...',
+  '.....###....',
+  '....###.....',
+  '...###......',
+  '..###.......',
+  '.###........',
+  '.##.........',
+  '.#..........',
+];
+const pencilRects: { x: number; y: number; w: number }[] = [];
+PENCIL_PIX.forEach((row, y) => {
+  let x = 0;
+  while (x < row.length) {
+    if (row[x] === '#') {
+      let w = 1;
+      while (row[x + w] === '#') w++;
+      pencilRects.push({ x, y, w });
+      x += w;
+    } else x++;
+  }
+});
 ---
 
 <svg
@@ -36,7 +65,17 @@ const widths = [
   aria-pressed="false"
   class="bevel fixed bottom-5 right-5 z-50 flex items-center gap-2 rounded-none px-3.5 py-2.5 font-mono text-xs uppercase tracking-wider text-dim transition-colors duration-200 hover:text-text focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-phosphor"
 >
-  <span id="draw-toggle-face" class="text-phosphor">(0_o)</span>
+  <svg
+    class="text-phosphor"
+    width="14"
+    height="14"
+    viewBox="0 0 12 12"
+    fill="currentColor"
+    shape-rendering="crispEdges"
+    aria-hidden="true"
+  >
+    {pencilRects.map((r) => <rect x={r.x} y={r.y} width={r.w} height="1" />)}
+  </svg>
   <span>annotate</span>
 </button>
 
@@ -94,7 +133,6 @@ const widths = [
   const capture = document.getElementById('draw-capture');
   const toggle = document.getElementById('draw-toggle') as HTMLButtonElement | null;
   const tools = document.getElementById('annotate-tools');
-  const faceEl = document.getElementById('draw-toggle-face');
 
   if (svg && capture && toggle && tools) {
     const BOIL_FRAMES = 3;
@@ -197,7 +235,6 @@ const widths = [
       toggle!.setAttribute('aria-pressed', String(active));
       toggle!.classList.toggle('hidden', active);
       tools!.classList.toggle('hidden', !active);
-      if (faceEl) faceEl.textContent = active ? '(0_0)' : '(0_o)';
       window.dispatchEvent(new CustomEvent('drawmode', { detail: { active } }));
     }
     function clearAll() {
@@ -243,21 +280,38 @@ const widths = [
       else if (k === 'c' && active) clearAll();
     });
 
-    capture.addEventListener('pointerdown', (e) => {
-      if (!active) return;
-      const x = e.clientX + window.scrollX;
-      const y = e.clientY + window.scrollY;
+    // Touch gesture model: ONE finger draws, TWO fingers scroll the page. We keep
+    // touch-action:none on the capture layer (so the browser never hijacks) and
+    // drive the scroll ourselves from the fingers' centroid. Mouse/pen always draw.
+    type Mode = 'none' | 'draw' | 'scroll';
+    const touches = new Map<number, { x: number; y: number }>();
+    let mode: Mode = 'none';
+    let lastCX = 0;
+    let lastCY = 0;
+
+    function centroid() {
+      let x = 0;
+      let y = 0;
+      for (const p of touches.values()) { x += p.x; y += p.y; }
+      const n = touches.size || 1;
+      return { x: x / n, y: y / n };
+    }
+    function startStroke(clientX: number, clientY: number) {
+      const x = clientX + window.scrollX;
+      const y = clientY + window.scrollY;
       const line = mkGroup(curColor, curWidth);
       svg!.appendChild(line.g);
       current = { ...line, pts: [{ x, y }], color: curColor, width: curWidth };
       setPoints(current, [{ x, y }, { x: x + 0.1, y }]);
-      capture!.setPointerCapture(e.pointerId);
-    });
-    capture.addEventListener('pointermove', (e) => {
-      if (!active || !current) return;
-      current.pts.push({ x: e.clientX + window.scrollX, y: e.clientY + window.scrollY });
+    }
+    function extendStroke(clientX: number, clientY: number) {
+      if (!current) return;
+      current.pts.push({ x: clientX + window.scrollX, y: clientY + window.scrollY });
       setPoints(current, current.pts);
-    });
+    }
+    function abortStroke() {
+      if (current) { current.g.remove(); current = null; }
+    }
     function endStroke() {
       if (current) {
         if (current.pts.length === 1) current.pts.push({ x: current.pts[0].x + 0.1, y: current.pts[0].y });
@@ -267,8 +321,64 @@ const widths = [
         current = null;
       }
     }
-    capture.addEventListener('pointerup', endStroke);
-    capture.addEventListener('pointercancel', endStroke);
+
+    capture.addEventListener('pointerdown', (e) => {
+      if (!active) return;
+      if (e.pointerType !== 'touch') {
+        mode = 'draw';
+        startStroke(e.clientX, e.clientY);
+        capture!.setPointerCapture(e.pointerId);
+        return;
+      }
+      touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (mode === 'scroll') return; // already in a multi-finger gesture
+      if (touches.size >= 2) {
+        // a second finger landed → drop the in-progress stroke, start scrolling
+        abortStroke();
+        mode = 'scroll';
+        const c = centroid();
+        lastCX = c.x; lastCY = c.y;
+        return;
+      }
+      mode = 'draw';
+      startStroke(e.clientX, e.clientY);
+    });
+    capture.addEventListener('pointermove', (e) => {
+      if (!active) return;
+      if (e.pointerType !== 'touch') {
+        if (mode === 'draw') extendStroke(e.clientX, e.clientY);
+        return;
+      }
+      if (!touches.has(e.pointerId)) return;
+      touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (mode === 'scroll' && touches.size >= 2) {
+        const c = centroid();
+        window.scrollBy(0, lastCY - c.y);
+        lastCX = c.x; lastCY = c.y;
+        return;
+      }
+      if (mode === 'draw' && touches.size === 1) extendStroke(e.clientX, e.clientY);
+    });
+    function onEnd(e: PointerEvent) {
+      if (e.pointerType !== 'touch') {
+        if (mode === 'draw') endStroke();
+        mode = 'none';
+        return;
+      }
+      touches.delete(e.pointerId);
+      if (mode === 'draw') endStroke();
+      if (touches.size === 0) {
+        mode = 'none';
+      } else if (mode === 'scroll' && touches.size >= 2) {
+        // fingers changed (e.g. 3→2) — re-baseline so scrolling stays smooth
+        const c = centroid();
+        lastCX = c.x; lastCY = c.y;
+      }
+      // If a multi-finger gesture drops to one finger, we stay in 'scroll' (idle)
+      // until every finger lifts — the leftover finger must not start drawing.
+    }
+    capture.addEventListener('pointerup', onEnd);
+    capture.addEventListener('pointercancel', onEnd);
 
     sizeSvg();
     window.addEventListener('resize', sizeSvg);

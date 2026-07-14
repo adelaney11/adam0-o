@@ -12,7 +12,7 @@ const { class: className = '' } = Astro.props;
 <div class:list={['flex min-h-[8rem] items-center justify-center', className]} aria-hidden="true">
   <div
     id="hf-box"
-    class="relative inline-flex items-center font-display leading-none text-text text-[5.5rem] sm:text-[7rem] md:text-[8.5rem]"
+    class="relative inline-flex cursor-pointer items-center font-display leading-none text-text text-[5.5rem] [touch-action:manipulation] sm:text-[7rem] md:text-[8.5rem]"
   >
     <span id="hf-text">0_o</span>
     <!-- caret is absolute (out of flow) so toggling it never shifts the face -->
@@ -101,5 +101,21 @@ const { class: className = '' } = Astro.props;
     box.style.transform = faces[fi].r ? 'rotate(90deg)' : 'none';
     if (!reduce) window.setTimeout(afterType, 1400);
     // note: intentionally keeps cycling during annotate mode (no drawmode freeze)
+
+    // tap/click the face to change it now (ignored mid-animation)
+    const change = () => {
+      if (busy) return;
+      window.clearTimeout(holdTimer);
+      if (reduce) {
+        let n = fi;
+        while (n === fi && faces.length > 1) n = Math.floor(Math.random() * faces.length);
+        fi = n;
+        textEl.textContent = faces[fi].t;
+        box.style.transform = faces[fi].r ? 'rotate(90deg)' : 'none';
+        return;
+      }
+      next();
+    };
+    box.addEventListener('click', change);
   }
 </script>
