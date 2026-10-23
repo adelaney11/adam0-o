@@ -3,6 +3,16 @@ import SectionHeading from './SectionHeading.astro';
 
 const jobs = [
   {
+    company: 'Walmart',
+    logo: '/experience/walmart.svg',
+    role: 'iOS Developer',
+    dates: 'Sep 2026 — Present',
+    bullets: [
+      'Address accessibility issues in the iOS app through targeted UI fixes.',
+      'Collaborate with backend engineers on schema changes and update client integrations to ensure app fields reflect backend data correctly.',
+    ],
+  },
+  {
     company: 'deskpop',
     href: 'https://deskpop.online',
     role: 'iOS Developer',
@@ -72,7 +82,7 @@ const jobs = [
                     <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
                       <span class="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden border border-line bg-panel/40">
                         <img
-                          src={`/experience/${job.company.toLowerCase().replace(/\s+/g, '')}.png`}
+                          src={job.logo ?? `/experience/${job.company.toLowerCase().replace(/\s+/g, '')}.png`}
                           alt={`${job.company} logo`}
                           loading="lazy"
                           class="h-full w-full object-contain p-1 transition duration-300 group-hover:opacity-100 group-hover:grayscale-0 [@media(hover:hover)]:opacity-75 [@media(hover:hover)]:grayscale"
